@@ -11,7 +11,7 @@ def route_after_classification(state: GraphState) -> str:
     if state.get('classification') == 'pass':
         return 'end'
 
-    if state.get('retry_count') > state.get('max_retries'):
+    if state.get('retry_count') >= state.get('max_retries'):
         return 'end'
 
     return 'retry'
