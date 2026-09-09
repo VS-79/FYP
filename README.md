@@ -107,6 +107,91 @@ Once started, access the server resources:
 
 ---
 
+## 🧪 Testing the Pipeline Locally
+
+`test_local_pipeline.py` provides a lightweight, end-to-end test runner that executes all five pipeline nodes in sequence **without needing a LangGraph server or any LLM API key** (the model provider is always `mock`).
+
+### Prerequisites
+
+| Tool | Required for |
+|------|-------------|
+| `npm` | Downloading & packing the target package (Node 1) |
+| [`syft`](https://github.com/anchore/syft) + [`grype`](https://github.com/anchore/grype) | Real vulnerability scanning (Node 2) |
+| [Docker](https://www.docker.com/) | Sandbox patch application (Node 4) |
+
+> **Note:** All three external tools can be bypassed using the flags below — only Python and the project dependencies are strictly required.
+
+### CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `--package-name` | *(required)* NPM package name to test |
+| `--package-version` | *(required)* Package version to test |
+| `--patch-scope` | `single` (default) or `all` — how many vulns to patch |
+| `--max-retries` | Number of patch retry attempts (default: `0`) |
+| `--source-dir` | Path to a pre-extracted source directory — skips `npm pack` + extract |
+| `--skip-vuln-detection` | Inject a mock vulnerability instead of running `syft`/`grype`/`npm audit` |
+| `--dump-state` | Print the full pipeline state dict at the end |
+
+### Usage Examples
+
+**Quickest run — no external tools needed:**
+```bash
+python test_local_pipeline.py \
+  --package-name lodash \
+  --package-version 4.17.15 \
+  --skip-vuln-detection
+```
+
+**Full flow (requires `npm`, `syft`, `grype`, and Docker):**
+```bash
+python test_local_pipeline.py \
+  --package-name lodash \
+  --package-version 4.17.15
+```
+
+**Use a pre-extracted source directory (skips `npm pack` + extract):**
+```bash
+python test_local_pipeline.py \
+  --package-name lodash \
+  --package-version 4.17.15 \
+  --source-dir ".workspace/packages/lodash/4.17.15/source/package" \
+  --skip-vuln-detection
+```
+
+**Dump the full state at the end for debugging:**
+```bash
+python test_local_pipeline.py \
+  --package-name semver \
+  --package-version 7.5.1 \
+  --skip-vuln-detection \
+  --dump-state
+```
+
+### What to Expect
+
+The runner prints a clear separator for each stage and a final summary:
+
+```
+============================================================
+  NODE 1 / 5 - PACKAGE INPUT
+============================================================
+  source_dir : .workspace/packages/lodash/...
+  tarball    : .workspace/packages/lodash/...
+
+...
+
+============================================================
+  PIPELINE COMPLETE
+============================================================
+  package            : lodash@4.17.15
+  classification     : ...
+  sandbox_success    : True
+  errors             : []
+```
+
+---
+
 ## 🛠 Tech Stack
 
 - **Framework**: [LangGraph](https://langchain-ai.github.io/langgraph/) & [LangChain Core](https://github.com/langchain-ai/langchain)
