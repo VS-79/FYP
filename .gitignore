@@ -6,6 +6,9 @@ ENV/
 # Environment variables & secrets
 .env
 
+# Exclude certifcates
+.pem
+
 # Python cache & bytecode
 __pycache__/
 *.py[cod]

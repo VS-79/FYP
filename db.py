@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 from dotenv import load_dotenv
 from pymongo import MongoClient, ASCENDING, errors
@@ -26,7 +27,10 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-_MONGO_URI  = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+_MONGO_URI       = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+# Set only when using X.509 certificate authentication (Atlas).
+# Path to the PEM file containing the client certificate + private key.
+_MONGO_CERT_PATH = os.getenv("MONGO_CERT_PATH")
 _DB_NAME    = "fyp_patches"
 _COL_PASS   = "successful_patches"
 _COL_ALL    = "all_attempts"
@@ -36,11 +40,36 @@ _client: MongoClient | None = None
 
 
 def _get_db():
-    """Return the database, initialising the client on first call."""
+    """Return the database, initialising the client on first call.
+
+    Supports two auth styles, chosen automatically:
+      - Username/password embedded in MONGO_URI (default)
+      - X.509 certificate auth, when MONGO_CERT_PATH is set. In this mode
+        MONGO_URI should NOT contain credentials — it should look like:
+          mongodb+srv://<cluster-host>/?authSource=$external&retryWrites=true&w=majority
+    """
     global _client
     if _client is None:
         logger.info("db - connecting to MongoDB: %s", _MONGO_URI.split("@")[-1])
-        _client = MongoClient(_MONGO_URI, serverSelectionTimeoutMS=5_000)
+
+        client_kwargs: dict = {"serverSelectionTimeoutMS": 5_000}
+
+        if _MONGO_CERT_PATH:
+            cert_path = Path(_MONGO_CERT_PATH)
+            if not cert_path.is_file():
+                raise FileNotFoundError(
+                    f"db - MONGO_CERT_PATH is set but does not point to a file: {cert_path}"
+                )
+            client_kwargs.update(
+                {
+                    "tls": True,
+                    "tlsCertificateKeyFile": str(cert_path),
+                    "authMechanism": "MONGODB-X509",
+                }
+            )
+            logger.info("db - using X.509 certificate authentication (%s)", cert_path.name)
+
+        _client = MongoClient(_MONGO_URI, **client_kwargs)
         # Verify connectivity early so failures are obvious
         _client.admin.command("ping")
         _ensure_indexes(_client[_DB_NAME])
